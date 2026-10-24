@@ -62,6 +62,7 @@
       <button id="igc-scan">1. Scan</button>
       <button id="igc-start" disabled>2. Start</button>
       <button id="igc-stop" disabled>Stop</button>
+      <button id="igc-check">Check</button>
     </div>
     <div id="igc-log" style="height:130px;overflow:auto;background:#f6f6f6;padding:6px;border-radius:6px;font-size:12px;white-space:pre-wrap"></div>`;
   document.body.appendChild(box);
@@ -94,11 +95,19 @@
   }
 
   // ---------- Followers dialog helpers (what you see on screen) ----------
-  const PROFILE_HREF = /^\/([A-Za-z0-9._]+)\/$/;
-  const hrefUser = a => { const m = (a.getAttribute("href") || "").match(PROFILE_HREF); return m ? m[1].toLowerCase() : null; };
+  const RESERVED = new Set(["explore", "reels", "reel", "direct", "accounts", "stories", "p", "tv", "about", "legal", "web", "api"]);
   const buttonsIn = root => [...root.querySelectorAll('button, div[role="button"]')];
   const findBtn = (root, text) => buttonsIn(root).find(b => norm(b.textContent) === text) || null;
   const allRemoveButtons = () => buttonsIn(document).filter(b => norm(b.textContent) === "remove");
+
+  function userFromAnchor(a) {
+    try {
+      const m = new URL(a.href, location.origin).pathname.match(/^\/([A-Za-z0-9._]+)\/?$/);
+      if (!m) return null;
+      const u = m[1].toLowerCase();
+      return RESERVED.has(u) ? null : u;
+    } catch { return null; }
+  }
 
   function getDialog() {
     return [...document.querySelectorAll('div[role="dialog"]')]
@@ -112,27 +121,24 @@
     return c[0] || null;
   }
 
-  function userAnchors(dialog) {
-    const map = new Map();
-    dialog.querySelectorAll("a[href]").forEach(a => {
-      const u = hrefUser(a);
-      if (u && !map.has(u)) map.set(u, a);
-    });
-    return map;
+  // Start from each Remove button, climb until the row contains exactly one username
+  function visibleRows(dialog) {
+    const rows = [];
+    for (const btn of buttonsIn(dialog)) {
+      if (norm(btn.textContent) !== "remove") continue;
+      let el = btn;
+      for (let i = 0; i < 12; i++) {
+        el = el.parentElement;
+        if (!el || el === dialog) break;
+        const names = new Set([...el.querySelectorAll("a[href]")].map(userFromAnchor).filter(Boolean));
+        if (names.size === 1) { rows.push({ u: [...names][0], el, btn }); break; }
+        if (names.size > 1) break;
+      }
+    }
+    return rows;
   }
 
-  function rowFor(anchor, username, dialog) {
-    let el = anchor;
-    for (let i = 0; i < 8; i++) {
-      el = el.parentElement;
-      if (!el || el === dialog) return null;
-      const foreign = [...el.querySelectorAll("a[href]")].some(a => { const u = hrefUser(a); return u && u !== username; });
-      if (foreign) return null;
-      const btn = findBtn(el, "remove");
-      if (btn) return { el, btn };
-    }
-    return null;
-  }
+  const userVisible = (dialog, u) => visibleRows(dialog).some(r => r.u === u);
 
   const blocked = () => /try again later|action blocked|we restrict certain activity/i.test(document.body.innerText);
 
@@ -142,23 +148,30 @@
     const before = new Set(allRemoveButtons());
     row.btn.click();
 
-    // confirmation popup: a NEW "Remove" button outside the followers list
+    // confirmation popup: the "Remove follower?" card with its own red Remove button
     const confirm = await waitFor(() => {
-      const nb = allRemoveButtons().filter(b => !before.has(b) && b.closest('div[role="dialog"]') !== dialog);
-      if (!nb.length) return null;
-      const btn = nb[nb.length - 1];
-      const area = btn.closest('[role="dialog"]') || btn.parentElement?.parentElement?.parentElement || document.body;
-      return { btn, area };
+      const fresh = allRemoveButtons().filter(btn => !before.has(btn)).reverse();
+      for (const btn of fresh) {
+        let el = btn;
+        for (let i = 0; i < 8; i++) {
+          el = el.parentElement;
+          if (!el) break;
+          if (norm(el.textContent).includes("remove follower")) return { btn, area: el };
+        }
+      }
+      return null;
     }, 7000);
-    if (!confirm) throw new Error("Confirmation popup did not appear");
-    if (!norm(confirm.area.textContent).includes(username)) throw new Error(`Confirmation popup did not mention @${username}, stopping to be safe`);
+    if (!confirm) throw new Error("The 'Remove follower?' popup did not appear");
+    let area = confirm.area;
+    if (!norm(area.textContent).includes(username) && area.parentElement) area = area.parentElement;
+    if (!norm(area.textContent).includes(username)) throw new Error(`Popup did not mention @${username}, stopping to be safe`);
 
     await sleep(rand([800, 1800]));
     confirm.btn.click();
 
     const gone = await waitFor(() => {
       const d = getDialog();
-      return d ? !userAnchors(d).has(username) : true;
+      return d ? !userVisible(d, username) : true;
     }, 10000);
     if (blocked()) throw new Error("Instagram showed a limit/block message");
     if (!gone) throw new Error(`@${username} is still in the list after confirming`);
@@ -201,6 +214,7 @@
     const limit = Math.max(0, parseInt($("#igc-limit").value, 10) || 0);
     const remaining = new Set(candidates.map(u => u.username.toLowerCase()));
     let removedThisRun = 0, batch = 0, idle = 0;
+    const seen = new Set();
 
     const sc0 = getScroller(dialog);
     if (sc0) sc0.scrollTop = 0;
@@ -214,12 +228,10 @@
         dialog = getDialog();
         if (!dialog) { log("Followers list was closed. Reopen it and press Start."); break; }
 
-        let target = null;
-        for (const [u, a] of userAnchors(dialog)) {
-          if (!remaining.has(u)) continue;
-          const row = rowFor(a, u, dialog);
-          if (row) { target = { u, row }; break; }
-        }
+        const rows = visibleRows(dialog);
+        rows.forEach(r => seen.add(r.u));
+        const hit = rows.find(r => remaining.has(r.u));
+        const target = hit ? { u: hit.u, row: hit } : null;
 
         if (!target) {
           const sc = getScroller(dialog);
@@ -253,9 +265,34 @@
       log(`Stopped: ${e.message}`);
     }
 
-    log(`Finished. Removed this run: ${removedThisRun}. Still to go: ${remaining.size}.`);
+    log(`Finished. Rows read from list: ${seen.size}. Removed this run: ${removedThisRun}. Still to go: ${remaining.size}.`);
+    if (seen.size === 0) log("Couldn't read any usernames from the list. Press Check and send me what it shows.");
     running = false; $("#igc-stop").disabled = true;
     $("#igc-start").disabled = candidates.length === 0;
+  };
+
+  $("#igc-check").onclick = () => {
+    const dialog = getDialog();
+    if (!dialog) return log("No followers list with Remove buttons found. Open Profile > Followers first.");
+    const removeBtns = buttonsIn(dialog).filter(b => norm(b.textContent) === "remove").length;
+    const rows = visibleRows(dialog);
+    log(`Remove buttons: ${removeBtns}, rows read: ${rows.length}`);
+    log("Sample: " + (rows.slice(0, 5).map(r => "@" + r.u).join(", ") || "none"));
+    if (candidates.length) {
+      const set = new Set(candidates.map(c => c.username.toLowerCase()));
+      log(`Visible rows that are on your remove list: ${rows.filter(r => set.has(r.u)).length}`);
+    }
+    const b = buttonsIn(dialog).find(x => norm(x.textContent) === "remove");
+    if (b) {
+      let el = b; const path = [];
+      for (let i = 0; i < 8 && el && el !== dialog; i++) {
+        el = el.parentElement; if (!el) break;
+        const as = [...el.querySelectorAll("a[href]")];
+        path.push(`${el.tagName.toLowerCase()}(a:${as.length}${as[0] ? " " + as[0].getAttribute("href") : ""})`);
+      }
+      log("Structure: " + path.join(" > "));
+    }
+    log(getScroller(dialog) ? "Scroll container found." : "No scroll container found.");
   };
 
   $("#igc-stop").onclick = () => { stopFlag = true; log("Stopping after current step..."); };

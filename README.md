@@ -1,3 +1,5 @@
+<p align="center"><img src="icons/icon128.png" alt="Follower Cleaner logo" width="96"></p>
+
 # Follower Cleaner
 
 A Chrome extension (Manifest V3) that helps you review and clean up your followers and following on **Instagram, X, TikTok and Facebook**, at a human pace, with a review step before anything happens.
@@ -68,6 +70,7 @@ Fast mode shows a warning and needs an explicit confirmation. It is never turned
 
 ```
 manifest.json
+icons/            logo and extension icons
 src/core.js        labels, button finder, row reader, action runner, bot scoring
 src/platforms.js   Instagram, X, TikTok, Facebook and generic adapters
 src/ui.js          panel, modals, review list

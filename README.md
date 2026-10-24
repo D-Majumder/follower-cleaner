@@ -9,7 +9,7 @@ A lightweight Chrome extension (Manifest V3) that finds followers you don't foll
 - Skips verified accounts by default
 - Randomized delays between actions (30-75 seconds)
 - Longer rest after every batch (4-8 minutes)
-- Daily cap (60 by default), persisted across page reloads
+- Optional daily cap (off by default), persisted across page reloads
 - Stops immediately on any error from Instagram
 - Runs entirely in your own logged-in browser session. No data leaves your machine.
 
@@ -24,7 +24,10 @@ A lightweight Chrome extension (Manifest V3) that finds followers you don't foll
 
 1. (Optional) Enter usernames to keep, one per line.
 2. Click **Scan** and wait for it to finish.
-3. Click **Start**. Use **Stop** at any time.
+3. Open your profile and click **Followers** so the list is open on screen.
+4. Click **Start**. The first run is limited to 3 removals as a test. Once it works, set "Limit this run" to 0 to remove everyone. Use **Stop** at any time.
+
+Scanning uses read-only requests. Removals are done through the Followers list on screen, clicking Remove and confirming, the same way you would by hand.
 
 ## Configuration
 
@@ -32,10 +35,10 @@ Edit the `CFG` object at the top of `content.js`:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `unfollowDelay` | 30-75 s | Random pause between removals |
+| `removeDelay` | 30-75 s | Random pause between removals |
 | `batchSize` | 8 | Removals before a longer rest |
 | `batchRest` | 4-8 min | Length of the longer rest |
-| `dailyCap` | 60 | Maximum removals per day |
+| `dailyCap` | 0 | Maximum removals per day (0 = no cap) |
 | `skipVerified` | true | Never remove verified accounts |
 
 ## Disclaimer

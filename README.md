@@ -29,6 +29,10 @@ A lightweight Chrome extension (Manifest V3) that finds followers you don't foll
 
 Scanning uses read-only requests. Removals are done through the Followers list on screen, clicking Remove and confirming, the same way you would by hand.
 
+## Fast mode (unsafe)
+
+Tick **Fast mode (unsafe)** in the panel to skip the long delays and the rests between batches. It still waits for each popup and list update to load, but removes followers back to back until the list is done. You'll get a warning before it turns on. This greatly raises the chance of an "action blocked" message, a temporary restriction, or a suspension. Use at your own risk. It still stops immediately if Instagram shows a limit message or something unexpected happens.
+
 ## Configuration
 
 Edit the `CFG` object at the top of `content.js`:

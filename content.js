@@ -58,6 +58,9 @@
     <label style="display:block;margin-bottom:6px">Limit this run (0 = all):
       <input id="igc-limit" type="number" min="0" value="3" style="width:60px">
     </label>
+    <label style="display:block;margin-bottom:6px;color:#b00020;font-weight:600">
+      <input id="igc-fast" type="checkbox"> Fast mode (unsafe)
+    </label>
     <div style="display:flex;gap:6px;margin-bottom:6px">
       <button id="igc-scan">1. Scan</button>
       <button id="igc-start" disabled>2. Start</button>
@@ -68,6 +71,18 @@
   document.body.appendChild(box);
   const $ = id => box.querySelector(id);
   const log = m => { const l = $("#igc-log"); l.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; l.scrollTop = l.scrollHeight; };
+
+  const isFast = () => $("#igc-fast").checked;
+  $("#igc-fast").onchange = e => {
+    if (!e.target.checked) return log("Fast mode off. Normal delays and rests restored.");
+    const ok = window.confirm(
+      "WARNING: Fast mode is UNSAFE.\n\n" +
+      "It removes followers with no rests and almost no delays. Instagram may block your actions " +
+      "(\"Try again later\"), temporarily restrict your account, or in worse cases suspend it.\n\n" +
+      "Use at your own risk. Continue?");
+    if (!ok) e.target.checked = false;
+    else log("FAST MODE on: no rests, minimal delays. This is unsafe.");
+  };
 
   // ---------- Scanning (read-only API calls) ----------
   async function readJson(res) {
@@ -144,7 +159,7 @@
 
   async function removeRow(dialog, username, row) {
     row.el.scrollIntoView({ block: "center" });
-    await sleep(rand([900, 2000]));
+    await sleep(isFast() ? rand([150, 350]) : rand([900, 2000]));
     const before = new Set(allRemoveButtons());
     row.btn.click();
 
@@ -166,7 +181,7 @@
     if (!norm(area.textContent).includes(username) && area.parentElement) area = area.parentElement;
     if (!norm(area.textContent).includes(username)) throw new Error(`Popup did not mention @${username}, stopping to be safe`);
 
-    await sleep(rand([800, 1800]));
+    await sleep(isFast() ? rand([150, 350]) : rand([800, 1800]));
     confirm.btn.click();
 
     const gone = await waitFor(() => {
@@ -238,7 +253,7 @@
           if (!sc) { log("Couldn't find the scrollable list."); break; }
           const h = sc.scrollHeight;
           sc.scrollTop += Math.floor(sc.clientHeight * 0.8);
-          await sleep(rand(CFG.scrollDelay));
+          await sleep(isFast() ? rand([600, 1200]) : rand(CFG.scrollDelay));
           const atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 5;
           idle = (atBottom && sc.scrollHeight === h) ? idle + 1 : 0;
           if (idle >= 3) { log("Reached the end of the list."); break; }
@@ -252,7 +267,9 @@
         const n = await bumpDaily();
         log(`Removed @${target.u} (today: ${n}, left: ${remaining.size})`);
 
-        if (batch >= CFG.batchSize) {
+        if (isFast()) {
+          await sleep(rand([300, 800]));
+        } else if (batch >= CFG.batchSize) {
           batch = 0;
           const rest = rand(CFG.batchRest);
           log(`Resting ${Math.round(rest / 60000)} min...`);

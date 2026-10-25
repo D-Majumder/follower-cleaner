@@ -5,10 +5,13 @@
 
   // What a person can ask the tool to do.
   FC.MODES = {
-    removeNonFollowing:   { title: "Remove followers I don't follow back", list: "followers", action: "removeFollower", warn: false },
-    unfollowNonFollowers: { title: "Unfollow people who don't follow me back", list: "following", action: "unfollow", warn: false },
-    removeBots:           { title: "Remove bot-like followers", list: "followers", action: "removeFollower", warn: false },
-    unfollowAll:          { title: "Unfollow everyone in the list", list: "following", action: "unfollow", warn: true }
+    removeNonFollowing:   { title: "Remove followers I don't follow back", list: "followers", action: "removeFollower", verb: "remove", past: "Removed" },
+    unfollowNonFollowers: { title: "Unfollow people who don't follow me back", list: "following", action: "unfollow", verb: "unfollow", past: "Unfollowed" },
+    removeBots:           { title: "Remove bot-like followers", list: "followers", action: "removeFollower", verb: "remove", past: "Removed" },
+    unfollowAll:          { title: "Unfollow everyone in the list", list: "following", action: "unfollow", verb: "unfollow", past: "Unfollowed", warn: true },
+    unfollowFriends:      { title: "Unfollow friends (stay friends, hide their posts)", list: "friends", action: "unfollowFriend", verb: "unfollow", past: "Unfollowed" },
+    unfriendNoMutual:     { title: "Unfriend people with no mutual friends", list: "friends", action: "unfriend", verb: "unfriend", past: "Unfriended", warn: true },
+    unfriendAll:          { title: "Unfriend everyone in the list", list: "friends", action: "unfriend", verb: "unfriend", past: "Unfriended", warn: true }
   };
 
   const url = a => { try { return new URL(a.href, location.origin); } catch { return null; } };
@@ -48,6 +51,7 @@
     id: "x", name: "X", hosts: ["x.com", "twitter.com"],
     modes: ["removeNonFollowing", "unfollowNonFollowers", "removeBots", "unfollowAll"],
     rowSelector: '[data-testid="UserCell"]',
+    skip: '[data-testid="sidebarColumn"], aside, [aria-label="Who to follow"]',
     userFromAnchor: a => handle(a, /^\/([A-Za-z0-9_]{1,15})$/, xRes),
     pageList: list => new RegExp("/(verified_)?" + list + "$").test(location.pathname),
     lists: {
@@ -74,6 +78,7 @@
     id: "tiktok", name: "TikTok", hosts: ["tiktok.com"],
     modes: ["removeNonFollowing", "unfollowNonFollowers", "removeBots", "unfollowAll"],
     containerSelector: '[data-e2e="follow-info-popup"]',
+    anyContainer: true,
     userFromAnchor: a => handle(a, /^\/@([A-Za-z0-9._]+)\/?$/, new Set()),
     lists: {
       followers: { open: "your profile > Followers", rowWords: L.friends.concat(L.follow, L.more) },
@@ -82,9 +87,10 @@
     actions: {
       removeFollower: { prompt: /remove/,
         steps: [
-          { from: "row", words: L.more },
-          { from: "layer", words: L.removeMenu },
-          { from: "layer", words: L.remove, optional: true }
+          // variant A: a direct "Remove" button in the row
+          [{ from: "row", words: L.remove }, { from: "layer", words: L.remove, optional: true }],
+          // variant B: the row's "..." menu, then "Remove this follower"
+          [{ from: "row", words: L.more }, { from: "layer", words: L.removeMenu }, { from: "layer", words: L.remove, optional: true }]
         ] },
       unfollow: { prompt: /unfollow|following/,
         steps: [
@@ -94,34 +100,42 @@
     }
   };
 
-  // ---------------- Facebook (limited) ----------------
-  const fbRes = set("groups watch marketplace events friends gaming pages notifications messages bookmarks stories reel reels settings help policies");
+  // ---------------- Facebook ----------------
+  // Real flow (Friends > All friends): each row has a "..." button that opens a menu
+  // (Favourites, Edit Friend List, Unfollow, Unfriend). Unfriend asks for a "Confirm".
+  const fbRes = set("groups watch marketplace events friends gaming pages notifications messages bookmarks stories reel reels settings help policies me home.php hashtag search ads privacy terms");
   P.facebook = {
     id: "facebook", name: "Facebook", hosts: ["facebook.com"],
-    modes: ["unfollowAll"],
+    modes: ["unfollowFriends", "unfriendNoMutual", "unfriendAll"],
+    menuRows: true, anyContainer: true,
     userFromAnchor: a => {
       const u = url(a); if (!u) return null;
       if (u.pathname === "/profile.php") return u.searchParams.get("id");
-      const m = u.pathname.match(/^\/([A-Za-z0-9.]{5,})\/?$/);
+      const m = u.pathname.match(/^\/([A-Za-z0-9.]{3,})\/?$/);
       return m && !fbRes.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null;
     },
+    pageList: () => true,
     lists: {
-      following: { open: "your profile > Friends > Following", rowWords: L.following },
-      followers: { open: "your followers list", rowWords: L.following }
+      friends: { open: "your profile > Friends > All friends", rowWords: L.more }
     },
     actions: {
-      unfollow: { prompt: /unfollow/,
+      unfollowFriend: { prompt: /unfollow/, verifyByClose: true,
         steps: [
-          { from: "row", words: L.following },
-          { from: "layer", words: L.unfollow },
-          { from: "layer", words: L.confirm, optional: true }
+          { from: "row", words: L.more, selector: '[aria-haspopup="menu"]' },
+          { from: "layer", words: L.unfollow }
+        ] },
+      unfriend: { prompt: /unfriend/,
+        steps: [
+          { from: "row", words: L.more, selector: '[aria-haspopup="menu"]' },
+          { from: "layer", words: L.unfriend },
+          { from: "layer", words: L.confirm, needName: true }
         ] }
     }
   };
 
   // ---------------- Generic fallback (add the site to manifest.json "matches" to use it) ----------------
   P.generic = {
-    id: "generic", name: location.hostname.replace(/^www\./, ""), hosts: [], generic: true,
+    id: "generic", name: location.hostname.replace(/^www\./, ""), hosts: [], generic: true, anyContainer: true,
     modes: ["removeNonFollowing", "unfollowNonFollowers", "unfollowAll"],
     userFromAnchor: a => handle(a, /^\/@?([A-Za-z0-9._-]{2,})\/?$/, set("home explore search settings login signup about help")),
     lists: {
@@ -130,7 +144,10 @@
     },
     actions: {
       removeFollower: { prompt: /remove/,
-        steps: [{ from: "row", words: L.remove.concat(L.more) }, { from: "layer", words: L.removeMenu.concat(L.remove), optional: true }, { from: "layer", words: L.remove, optional: true }] },
+        steps: [
+          [{ from: "row", words: L.remove }, { from: "layer", words: L.remove, optional: true }],
+          [{ from: "row", words: L.more }, { from: "layer", words: L.removeMenu }, { from: "layer", words: L.remove, optional: true }]
+        ] },
       unfollow: { prompt: /unfollow/,
         steps: [{ from: "row", words: L.following.concat(L.friends) }, { from: "layer", words: L.unfollow, optional: true }] }
     }

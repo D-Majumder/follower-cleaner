@@ -6,25 +6,30 @@ A Chrome extension (Manifest V3) that helps you review and clean up your followe
 
 ## What it can do
 
-| Mode | What it does |
-| --- | --- |
-| Remove followers I don't follow back | Takes people who follow you, but you don't follow, off your followers list |
-| Unfollow people who don't follow me back | Unfollows accounts that don't follow you back |
-| Remove bot-like followers | Scores followers for bot-like signs, you approve the list |
-| Unfollow everyone in the list | Unfollows everything in the open list except your keep list |
+| Mode | What it does | Where |
+| --- | --- | --- |
+| Remove followers I don't follow back | Takes people who follow you, but you don't follow, off your followers | Instagram, X, TikTok |
+| Unfollow people who don't follow me back | Unfollows accounts that don't follow you back | Instagram, X, TikTok |
+| Remove bot-like followers | Scores followers for bot-like signs, you approve the list | Instagram, X, TikTok |
+| Unfollow everyone in the list | Unfollows everything in the open list except your keep list | Instagram, X, TikTok |
+| Unfollow friends | Stay friends, but stop seeing their posts | Facebook |
+| Unfriend people with no mutual friends | Unfriends friends whose row shows no mutual friends | Facebook |
+| Unfriend everyone in the list | Unfriends every person in the open list except your keep list | Facebook |
 
 Other features: review list with per-account tick boxes, keep list, skip verified accounts, per-run limit, daily cap, CSV export, three speed profiles, a custom warning before Fast mode, live stats and a progress bar, and a read-only **Check** button for diagnostics.
 
 ## Platform support
 
-| Platform | Remove followers | Unfollow non-followers | Bots | Unfollow all |
+| Platform | Remove followers | Unfollow non-followers | Bots | Unfollow / unfriend |
 | --- | :---: | :---: | :---: | :---: |
 | Instagram | yes | yes | yes | yes |
 | X (Twitter) | yes (web only) | yes | yes | yes |
 | TikTok | yes | yes | limited | yes |
-| Facebook | no | no | no | yes |
+| Facebook | n/a | n/a | n/a | yes (Friends list) |
 
-Facebook doesn't show who follows you back and doesn't let you remove followers from a list, so only "Unfollow everyone in the list" is available there. Buttons and layouts change often, and X, TikTok and Facebook have not been tested as extensively as Instagram. If something doesn't work, press **Check** and open an issue with its output.
+Facebook doesn't show who follows you back and doesn't let you remove followers from a list, so it works on your **Friends** list instead: Friends, then All friends. Its flow is the row's three-dot button, then Unfollow or Unfriend, then Confirm.
+
+Buttons and layouts change often. Instagram and Facebook were built against real screenshots of their flows. X and TikTok follow the published wording and have not been tested as extensively. If something doesn't work, press **Check** and open an issue with its output.
 
 ## How it finds buttons
 
@@ -84,3 +89,7 @@ This project automates actions on social platforms, which their terms of use gen
 ## License
 
 MIT
+
+---
+
+Made by [Dhruba Majumder](https://github.com/D-Majumder)

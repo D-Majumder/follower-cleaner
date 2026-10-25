@@ -71,7 +71,10 @@
 
   // ----- Other platforms: read the open list on screen while scrolling (read-only) -----
   function decide(mode, p) {
-    if (mode === "unfollowAll") return "In the list";
+    if (mode === "unfollowAll" || mode === "unfollowFriends" || mode === "unfriendAll") {
+      return platform.id === "facebook" ? `${p.mutual} mutual friends` : "In the list";
+    }
+    if (mode === "unfriendNoMutual") return p.mutual === 0 ? "No mutual friends shown" : null;
     if (mode === "removeNonFollowing") return p.relation === "follow" ? "Follows you, you don't follow back" : null;
     if (mode === "unfollowNonFollowers") {
       if (platform.id === "tiktok") return p.relation === "following" ? "Not a mutual (no Friends status)" : null;
@@ -124,7 +127,7 @@
       let found = platform.api ? await scanInstagram(mode) : await scanDom(mode);
       const keep = keepSet(), skipV = ui.settings().skipVerified;
       const before = found.length;
-      found = found.filter(p => !keep.has(p.u) && !(skipV && p.verified));
+      found = found.filter(p => !keep.has(p.u) && !keep.has(norm(p.name)) && !(skipV && p.verified));
       state.cands = found.sort((a, b) => (b.score || 0) - (a.score || 0));
       state.approved = new Set(found.map(p => p.u));
       state.done = 0; state.target = 0;
@@ -181,7 +184,7 @@
     const avg = ([a, b]) => (a + b) / 2;
     const secs = n * (avg(sp.act) / 1000) + (sp.batch ? Math.floor(n / sp.batch) * (avg(sp.rest) / 1000) : 0);
     const eta = secs < 90 ? `${Math.round(secs)} seconds` : secs < 5400 ? `about ${Math.round(secs / 60)} minutes` : `about ${(secs / 3600).toFixed(1)} hours`;
-    const verb = m.action === "removeFollower" ? "remove" : "unfollow";
+    const verb = m.verb;
     const ok = await ui.modal({
       tone: m.warn || s.speed === "fast" ? "danger" : "info", title: `Ready to ${verb} ${n} account${n === 1 ? "" : "s"}?`,
       html: `<ul><li><b>Site:</b> ${platform.name}</li><li><b>Action:</b> ${FC.MODES[mode].title}</li><li><b>Speed:</b> ${sp.name} (${sp.hint})</li>
@@ -219,13 +222,15 @@
         }
         idle = 0;
 
-        const res = await FC.act(hit, action.steps, { username: hit.u, prompt: action.prompt, pre: () => rand(sp.pre), step: () => rand(sp.pre) });
+        const res = await FC.act(hit, action.steps, {
+          username: hit.u, alias: FC.rowInfo(hit).name, prompt: action.prompt, verifyByClose: !!action.verifyByClose,
+          pre: () => rand(sp.pre), step: () => rand(sp.pre) });
         remaining.delete(hit.u);
         state.cands = state.cands.filter(c => c.u !== hit.u);
         state.approved.delete(hit.u);
         state.done++; batch++;
         const t = await bumpDaily();
-        if (res.verified) { unverified = 0; log(`${m.action === "removeFollower" ? "Removed" : "Unfollowed"} @${hit.u} (today: ${t}, left: ${remaining.size})`); }
+        if (res.verified) { unverified = 0; log(`${m.past} @${hit.u} (today: ${t}, left: ${remaining.size})`); }
         else {
           unverified++; log(`Clicked through for @${hit.u} but couldn't confirm it worked (${unverified}/3)`);
           if (unverified >= 3) throw new Error("3 actions in a row couldn't be confirmed. The site may be blocking you");

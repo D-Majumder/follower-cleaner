@@ -10,12 +10,13 @@
       "eliminar seguidor", "eliminar a este seguidor", "supprimer ce follower", "supprimer cet abonné",
       "follower entfernen", "remover seguidor", "rimuovi follower"],
     following: ["following", "requested", "siguiendo", "seguindo", "abonné", "abonné(e)", "gefolgt", "segui già"],
+    unfriend: ["unfriend", "eliminar de amigos", "eliminar amigo", "retirer de mes amis", "als freund entfernen", "desfazer amizade", "rimuovi dagli amici"],
     unfollow: ["unfollow", "dejar de seguir", "ne plus suivre", "se désabonner", "entfolgen", "deixar de seguir", "smetti di seguire"],
     follow: ["follow", "follow back", "seguir", "seguir también", "seguir também", "suivre", "suivre en retour",
       "folgen", "zurückfolgen", "segui", "segui anche tu"],
     friends: ["friends", "friend", "amigos", "amis", "freunde", "amici"],
     followsYou: ["follows you", "te sigue", "vous suit", "folgt dir", "segue você", "ti segue"],
-    more: ["more", "more actions", "more options", "options", "más opciones", "plus d'options",
+    more: ["more", "more actions", "more options", "options", "friend options", "friends options", "más opciones", "plus d'options",
       "weitere optionen", "mais opções", "altre opzioni", "…", "...", "⋯"],
     confirm: ["confirm", "ok", "yes", "sí", "oui", "ja", "sim", "conferma"],
     followersHead: ["followers", "seguidores", "abonnés", "follower", "seguaci"],
@@ -108,23 +109,47 @@
     return null;
   };
 
+  const inChrome = el => !!el.closest('header, nav, [role="banner"], [role="navigation"]');
+  let skipSel = "";
+  const skipped = el => !!skipSel && !!el.closest(skipSel);
+
   FC.readRows = (platform, container, list) => {
+    skipSel = platform.skip || "";
     const out = new Map();
     const add = (el, u) => { if (u && !out.has(u)) out.set(u, { el, u }); };
     if (platform.rowSelector) {
       container.querySelectorAll(platform.rowSelector).forEach(el => {
+        if (skipped(el)) return;
         add(el, [...el.querySelectorAll("a[href]")].map(platform.userFromAnchor).find(Boolean));
       });
     }
+    // 1) rows found through their action buttons (by label, or by "opens a menu")
     if (!out.size) {
       const words = platform.lists[list].rowWords;
       for (const btn of container.querySelectorAll(CLICKABLE)) {
-        if (!visible(btn) || !matches(btn, words)) continue;
+        if (!visible(btn) || inChrome(btn) || skipped(btn)) continue;
+        if (!matches(btn, words) && !(platform.menuRows && btn.getAttribute("aria-haspopup") === "menu")) continue;
         const r = FC.rowOf(btn, container, platform.userFromAnchor);
         if (r) add(r.el, r.u);
       }
     }
-    return [...out.values()];
+    // 2) also pick up rows through their profile links, in case their buttons use unexpected wording
+    {
+      for (const a of container.querySelectorAll("a[href]")) {
+        const u = platform.userFromAnchor(a);
+        if (!u || out.has(u) || inChrome(a) || skipped(a)) continue;
+        let el = a;
+        for (let i = 0; i < 10; i++) {
+          el = el.parentElement;
+          if (!el || el === container || el === document.body) break;
+          const names = new Set([...el.querySelectorAll("a[href]")].map(platform.userFromAnchor).filter(Boolean));
+          if (names.size > 1) break;
+          if ([...el.querySelectorAll(CLICKABLE)].some(b => visible(b) && !b.matches("a[href]"))) { add(el, u); break; }
+        }
+      }
+    }
+    // keep on-screen (top to bottom) order
+    return [...out.values()].sort((a, b) => (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
   };
 
   FC.findContainer = (platform, list) => {
@@ -132,24 +157,22 @@
     const okFor = c => c.querySelector("a[href]") && FC.readRows(platform, c, list).length > 0 &&
       (!platform.headingOk || platform.headingOk(c, list));
     for (const c of [...document.querySelectorAll(sel)].filter(visible).reverse()) if (okFor(c)) return c;
-    if (platform.pageList && platform.pageList(list)) {
-      const main = document.querySelector("main") || document.body;
-      if (okFor(main)) return main;
-    }
+    const main = document.querySelector('main, [role="main"]') || document.body;
+    if (platform.pageList && platform.pageList(list) && okFor(main)) return main;
+    if (platform.anyContainer) { if (okFor(main)) return main; if (okFor(document.body)) return document.body; }
     return null;
   };
 
   FC.makeScroller = container => {
-    const isPage = container === document.body || container.tagName === "MAIN";
+    const isPage = container === document.body || container.tagName === "MAIN" || container.getAttribute("role") === "main";
     let el = null;
     if (!isPage) {
       const c = [container, ...container.querySelectorAll("div, ul, section")].filter(e =>
         e.scrollHeight > e.clientHeight + 20 && /(auto|scroll)/.test(getComputedStyle(e).overflowY));
       c.sort((a, b) => b.scrollHeight - a.scrollHeight);
       el = c[0] || null;
-      if (!el) return null;
     }
-    const se = el || document.scrollingElement || document.documentElement;
+    const se = el || document.scrollingElement || document.documentElement; // no inner scroller: scroll the page
     const viewH = () => (el ? el.clientHeight : window.innerHeight);
     return {
       reset: () => { se.scrollTop = 0; },
@@ -171,25 +194,32 @@
     else if (btns.some(b => matches(b, L.follow)) || lines.some(l => L.follow.includes(norm(l)) || /[·•]\s*(follow|follow back)\s*$/i.test(l))) relation = "follow";
     const rest = lines.filter(l => norm(l) !== row.u && l !== "·" && !L.all.includes(norm(l)) && !norm(l).startsWith("@"));
     const img = el.querySelector("img");
+    const mm = t.match(/(\d[\d,]*)\s+mutual/);
     return {
       u: row.u,
       name: rest[0] || "",
       bio: rest.slice(1).join(" "),
       relation,
       followsYou: L.followsYou.some(w => t.includes(w)),
+      mutual: mm ? parseInt(mm[1].replace(/,/g, ""), 10) : 0,
       verified: !!el.querySelector('[aria-label*="erified" i], svg[title*="erified" i], [data-testid="icon-verified"]'),
       defaultAvatar: !!img && /default_profile|default-avatar|anonymous|empty_avatar|default_pfp/i.test(img.src || "")
     };
   };
 
   // ---------- Action runner ----------
-  // steps: [{from:"row"|"layer", words:[...], selector?:"css", optional?:bool}]
+  // steps: [{from:"row"|"layer", words:[...], selector?:"css", optional?:bool, needName?:bool}]
   // "row"   = a control inside the person's row.
   // "layer" = a control that APPEARS after the previous click (menu item, confirm button).
-  FC.act = async (row, steps, { username, prompt, pre, step }) => {
+  // steps may also be a list of alternative step lists: the first whose row control exists is used.
+  FC.act = async (row, steps, { username, alias = "", prompt, pre, step, verifyByClose = false }) => {
+    if (Array.isArray(steps[0])) {
+      steps = steps.find(v => v[0].from !== "row" || FC.find(row.el, v[0].words, v[0].selector)) || steps[0];
+    }
+    const aliasN = norm(alias);
     row.el.scrollIntoView({ block: "center" });
     await FC.sleep(pre());
-    let snap = null, first = null, firstLabels = "";
+    let snap = null, first = null, last = null, firstLabels = "";
     for (const st of steps) {
       let target;
       if (st.from === "row") {
@@ -209,18 +239,20 @@
         const box = target.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [aria-modal="true"]')
           || target.parentElement?.parentElement?.parentElement || document.body;
         const txt = norm(box.textContent);
-        if (!txt.includes(username) && !(prompt && prompt.test(txt))) {
-          throw new Error(`Popup didn't look right for @${username}, stopping to be safe`);
-        }
+        const looksRight = txt.includes(username) || (aliasN && txt.includes(aliasN)) || (prompt && prompt.test(txt));
+        if (!looksRight) throw new Error(`Popup didn't look right for @${username}, stopping to be safe`);
+        if (st.needName && aliasN && !txt.includes(aliasN)) throw new Error(`Popup didn't mention "${alias}", stopping to be safe`);
       }
       snap = new Set(document.querySelectorAll(CLICKABLE));
       if (!first) { first = target; firstLabels = labelsOf(target).join("|"); }
+      last = target;
       target.click();
       await FC.sleep(step());
     }
     if (!first) throw new Error("No action was performed");
     const verified = !!(await FC.waitFor(() =>
-      !row.el.isConnected || !first.isConnected || !visible(first) || labelsOf(first).join("|") !== firstLabels, 9000));
+      !row.el.isConnected || !first.isConnected || !visible(first) || labelsOf(first).join("|") !== firstLabels ||
+      (verifyByClose && (!last.isConnected || !visible(last))), 9000));
     if (FC.blocked()) throw new Error("The site showed a limit/block message");
     return { verified };
   };

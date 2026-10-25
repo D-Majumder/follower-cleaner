@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Follower Cleaner",
-  "version": "2.0.0",
-  "description": "Review and clean up your followers and following on Instagram, X, TikTok and Facebook with human-paced automation.",
+  "version": "2.1.0",
+  "description": "Review and clean up your followers, following and friends on Instagram, X, TikTok and Facebook with human-paced automation.",
   "permissions": [
     "storage"
   ],
@@ -30,5 +30,7 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "author": "Dhruba Majumder",
+  "homepage_url": "https://github.com/D-Majumder"
 }

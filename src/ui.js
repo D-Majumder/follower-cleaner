@@ -15,7 +15,7 @@
   .pill{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.22);color:#fff}
   .pill.busy{background:#2563eb}.pill.ok{background:#16a34a}.pill.warn{background:#d97706}.pill.error{background:#dc2626}
   .icon{width:24px;height:24px;border:none;border-radius:6px;background:rgba(255,255,255,.2);color:#fff;font-size:16px;line-height:1;cursor:pointer}
-  .body{padding:14px;display:flex;flex-direction:column;gap:12px;max-height:76vh;overflow:auto;background:var(--bg)}
+  .body{padding:14px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 110px);overflow:auto;background:var(--bg)}
   .body.hidden{display:none}
   .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;color:var(--muted);margin-bottom:5px}
   select,input[type=number],textarea,input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font-size:13px}
@@ -46,6 +46,8 @@
   .t1{font-weight:600}
   .loghead{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
   .log{height:112px;overflow:auto;background:var(--logbg);border:1px solid var(--line);border-radius:10px;padding:8px;font:11.5px/1.55 ui-monospace,Menlo,Consolas,monospace}
+  .foot{text-align:center;font-size:11.5px;color:var(--muted);padding-top:2px}
+  .foot a{color:var(--accent);text-decoration:none;font-weight:600}.foot a:hover{text-decoration:underline}
   .l .t{color:var(--muted);margin-right:6px}.l.ok{color:var(--ok)}.l.err{color:var(--danger)}
   /* modal */
   .ov{position:fixed;inset:0;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:16px;z-index:2147483647}
@@ -69,7 +71,10 @@
     removeNonFollowing: "Removes people who follow you but whom you don't follow.",
     unfollowNonFollowers: "Unfollows accounts you follow that don't follow you back.",
     removeBots: "Scores followers for bot-like signs. You review the list before anything happens.",
-    unfollowAll: "Unfollows every account in the open list except your keep list. Use with care."
+    unfollowAll: "Unfollows every account in the open list except your keep list. Use with care.",
+    unfollowFriends: "Stops seeing their posts but keeps the friendship. Nobody is told.",
+    unfriendNoMutual: "Unfriends people whose row shows no mutual friends. Review the list first.",
+    unfriendAll: "Unfriends every person in the open list except your keep list. Use with great care."
   };
 
   function modal({ tone = "info", title, html, ok = "OK", cancel = "Cancel", needCheck = null, wide = false, collect = null }) {
@@ -151,7 +156,7 @@
           <div class="seg" id="speed"><button data-v="safe">Safe</button><button data-v="normal">Normal</button><button data-v="fast" class="fastb">Fast</button></div>
           <div class="hint" id="speedhint"></div></div>
         <details><summary>More options</summary><div>
-          <div><div class="lbl">Keep list (never touched)</div><textarea id="keep" placeholder="One username per line"></textarea></div>
+          <div><div class="lbl">Keep list (never touched)</div><textarea id="keep" placeholder="One username per line (on Facebook, the person's name)"></textarea></div>
           <label class="chk"><input type="checkbox" id="skipv"> Skip verified accounts</label>
           <div class="two"><div><div class="lbl">Limit per run</div><input id="limit" type="number" min="0"><div class="hint">0 = no limit</div></div>
             <div><div class="lbl">Daily cap</div><input id="cap" type="number" min="0"><div class="hint">0 = no cap</div></div></div>
@@ -171,6 +176,7 @@
         <div class="step"><div class="num">3</div><div class="row grow"><button class="btn primary grow" id="start" disabled>Start</button><button class="btn danger" id="stop" disabled>Stop</button></div></div>
 
         <div><div class="loghead"><span>Activity</span><button class="btn ghost" id="clear">Clear</button></div><div class="log" id="log"></div></div>
+        <div class="foot">Made by Dhruba Majumder &middot; <a href="https://github.com/D-Majumder" target="_blank" rel="noopener noreferrer">GitHub &#8599;</a></div>
       </div>
     </div>`;
     document.body.appendChild(host);
@@ -217,7 +223,7 @@
     // ----- log / status / stats -----
     const logEl = $("#log");
     const log = m => {
-      const kind = /^(Removed|Unfollowed)/.test(m) ? "ok" : /Stopped|error|Couldn't|Can't|did not|isn't|was closed|Not logged|showed a/i.test(m) ? "err" : "";
+      const kind = /^(Removed|Unfollowed|Unfriended)/.test(m) ? "ok" : /Stopped|error|Couldn't|Can't|did not|isn't|was closed|Not logged|showed a/i.test(m) ? "err" : "";
       const d = document.createElement("div"); d.className = "l " + kind;
       d.innerHTML = `<span class="t">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>`;
       d.appendChild(document.createTextNode(m));
